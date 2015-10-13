@@ -1,0 +1,168 @@
+&GLOBAL
+  PROJECT
+  RUN_TYPE geo_opt # HERE YOU SPECIFY WHAT TYPE OF RUN YOU WANT TO DO!
+  PRINT_LEVEL low
+&END GLOBAL
+
+# &EXT_RESTART
+#   RESTART_FILE_NAME ./bulk_20131205-112435_32_c4_16/TiO2-1.restart  # RESTART A SIMULATION FROM AN EXTERNAL .restart FILE
+#   RESTART_COUNTERS T                   # WHICH IS WRITTEN OUT EVERY SOME STEP AT EACH CP2K RUN.
+#   RESTART_THERMOSTAT T                 # A .restart FILE IS SIMPLY A FULL INPUT FILE CONTAINING ALL INFORMATION OF THE CURRENT RUN
+#   RESTART_CONSTRAINT T                 # NEEDED TO RESTART THE RUN ITSELF.
+#   RESTART_DEFAULT T
+#   RESTART_VEL T
+#   RESTART_POS T
+# &END EXT_RESTART
+# EXTEND_FFT_LENGTHS
+ 
+&FORCE_EVAL
+
+  STRESS_TENSOR analytical
+  METHOD QS #QUICKSTEP IS THE METHOD TO USE IF YOU RUN DFT CALCULATIONS 
+
+  &DFT
+    BASIS_SET_FILE_NAME /projects/SiO2_Fracture/CP2K_db/BASIS_MOLOPT
+    POTENTIAL_FILE_NAME /projects/SiO2_Fracture/CP2K_db/POTENTIAL
+    &MGRID #MULTIGRID SECTION TO DEFINE THE PW EXPANSION
+      # CUTOFF 480 #CUTOFF FOR PW EXPANSION
+      NGRIDS 4       
+    &END MGRID
+  
+    &QS
+      EXTRAPOLATION ASPC # <- This method for the extrapolation of the WFN is very efficient compared to PS
+      EXTRAPOLATION_ORDER 3 # <- between 3 and 4 is very good
+      EPS_DEFAULT 1.0E-10 # <-  EPS_DEFAULT should be <= (EPS_SCF)^2 and you should use EPS_SCF based on the drift you want...
+      MAP_CONSISTENT
+    &END QS
+
+    &SCF
+      EPS_SCF 1.0E-5 #CONVERGENCE CRITERION FOR THE WFN OPTIMIZATION
+      MAX_SCF 50
+      SCF_GUESS RESTART
+      
+      &OT 
+        ALGORITHM IRAC # <- IRAC usually very efficient for not very hard systems, e.g. liquid water. OT is also good, to try if you have convergence issues
+        MINIMIZER DIIS  # <- quickest minimizer, but for hard systems use CG along with PRECONDITIONER FULL_ALL
+        PRECONDITIONER FULL_SINGLE_INVERSE # FULL_ALL  <- FULL_SINGLE_INVERSE is the quickest
+      &END OT
+      
+      &PRINT
+	&RESTART
+	  &EACH
+	    MD 5
+	  &END EACH
+	&END RESTART
+      &END PRINT
+      
+      &OUTER_SCF  #<- If you have convergence issues use the OUTER_SCF (EPS_SCF must be the same as above), as it will perform additional SCFs restarting the preconditioner..
+        MAX_SCF 50
+        EPS_SCF 1.0E-5
+      &END OUTER_SCF
+
+      # &SMEAR ON
+      #   METHOD FERMI_DIRAC
+      #   ELECTRONIC_TEMPERATURE [K] 300
+      # &END SMEAR      
+    &END SCF
+    
+
+    &XC
+      &XC_FUNCTIONAL PBE
+      &END XC_FUNCTIONAL
+      &XC_GRID
+        XC_SMOOTH_RHO NN10
+        XC_DERIV SPLINE2_smooth
+      &END XC_GRID
+    &END XC
+    
+  &END DFT
+  
+  &SUBSYS
+    &COORD
+      @INCLUDE
+    &END COORD
+
+    &CELL
+      ABC
+      PERIODIC none
+    &END CELL
+
+    #---------------------------------------------------#
+    # BELOW THERE IS THE DEFINITION OF THE GAUSSIAN BASIS SETS
+    # BASIS SET OPTIMIZED FOR MOLECULES (filename is BASIS_MOLOPT used above) THAT IS ESPECIALLY SUITABLE IN THE CONDENSED PHASE AND GIVES RISE
+    # TO  A SMALL BASIS SET SUPERPOSITION ERROR (BSSE)
+    #---------------------------------------------------#
+    &KIND Si
+      BASIS_SET DZVP-MOLOPT-GTH-q4
+      POTENTIAL GTH-PBE-q4
+    &END KIND
+    &KIND O
+      ELEMENT O 
+      BASIS_SET DZVP-MOLOPT-GTH-q6
+      POTENTIAL GTH-PBE-q6
+    &END KIND
+    &KIND H
+      Element H
+      BASIS_SET DZVP-MOLOPT-GTH-q1
+      POTENTIAL GTH-PBE-q1
+    &END KIND
+
+  &END SUBSYS
+
+&END FORCE_EVAL
+
+&MOTION
+  &GEO_OPT
+    TYPE MINIMIZATION        
+    # OPTIMIZER LBFGS
+    # MAX_ITER 1000
+    # MAX_DR    1.0E-02
+    # MAX_FORCE 1.0E-02
+    # RMS_DR    1.0E-02
+    # RMS_FORCE 1.0E-02
+    OPTIMIZER BFGS
+    MAX_DR    1.0E-03
+    MAX_FORCE 1.0E-03
+    RMS_DR    1.0E-03
+    RMS_FORCE 1.0E-03
+    MAX_ITER 200
+    # &BFGS
+    #   USE_MODEL_HESSIAN FALSE
+    #   USE_RAT_FUN_OPT TRUE
+    #   TRUST_RADIUS 0.1
+    # &END BFGS
+
+    # MAX_ITER 200
+    # OPTIMIZER CG
+    # &CG
+    #   MAX_STEEP_STEPS  0
+    #   RESTART_LIMIT 9.0E-01
+    # &END CG
+  &END GEO_OPT
+
+  &PRINT
+    &TRAJECTORY
+      # FILENAME ./traj
+      FORMAT XYZ
+      ADD_LAST NUMERIC
+    &END TRAJECTORY
+    &FORCES ON
+      # FILENAME ./forces
+      ADD_LAST Numeric
+      UNIT eV*angstrom^-1
+      FORMAT XYZ
+    &END FORCES
+    &VELOCITIES
+      # FILENAME ./velo
+      FORMAT XYZ
+      UNIT angstrom*fs^-1
+    &END VELOCITIES
+  &END PRINT
+
+  &CONSTRAINT
+    &FIXED_ATOMS
+      COMPONENTS_TO_FIX XYZ
+      LIST
+    &END FIXED_ATOMS
+  &END CONSTRAINT
+&END MOTION
