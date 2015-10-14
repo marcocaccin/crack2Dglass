@@ -68,6 +68,7 @@ with open('sio22d_minim_template.inp', 'r') as fff:
 
 # Write everything to folder
 os.chdir(folder)
+cluster_ase.set_array('orig_index', cluster_indices)
 cluster_ase.write('ase_cluster_00.xyz', format='extxyz')
 cluster_ase.write('cp2k_cluster_00.xyz', format='xyz')
 os.system('tail -n +3 cp2k_cluster_00.xyz > tmp && mv tmp cp2k_cluster_00.xyz')
@@ -108,12 +109,16 @@ if pre_optim:
     crack_slab = relax_structure(crack_slab)
     crack_slab.write('crack_open.xyz', format='extxyz')
     pretty.positions[:,:] = crack_slab.get_positions()
-    cluster = create_cluster_simple(pretty, args_str=quippy.util.args_str(cluster_args))
-    assert (cluster_indices - np.array(cluster.orig_index - 1)).sum() == 0
-    cluster_ase = ase.Atoms(np.array(cluster.z), np.array(cluster.positions))
+    cluster10 = create_cluster_simple(pretty, args_str=quippy.util.args_str(cluster_args))
+    # remap is an essential step: re-indexes the atoms in cluster10 following the order in cluster
+    # without this, there is no way to do NEB or anything that needs connection between initial and final state
+    remap = [np.where(idx == cluster10.orig_index)[0].item() for idx in cluster.orig_index]
+
+    cluster_ase = ase.Atoms(np.array(cluster10.z)[remap], np.array(cluster10.positions)[remap])
     cluster_ase.positions -= shift_cluster
     cluster_ase.set_cell(np.diag(abc))
-
+    
+cluster_ase.set_array('orig_index', cluster_indices)
 cluster_ase.write('ase_cluster_10.xyz', format='extxyz')
 cluster_ase.write('cp2k_cluster_10.xyz', format='xyz')
 os.system('tail -n +3 cp2k_cluster_10.xyz > tmp && mv tmp cp2k_cluster_10.xyz')
