@@ -16,7 +16,7 @@ from params import initial_strain as strain
 from some_tools import relax_structure
 
 ##### PARAMETERS TO CHANGE #####
-buffer_hops = 7
+buffer_hops = 10
 deltay_tip = 1.
 
 
@@ -25,7 +25,11 @@ cluster_vacuum  = 12.0
 crack_slab = ase.io.read('crack.xyz', format='extxyz')
 
 ring_size = int(raw_input('Size of ring at crack tip:'))
-pre_optim = (sys.argv[1] in ['', 't', 'T', 'True', 'true', 'y', 'yes'])
+pre_optim = True
+try:
+    pre_optim = (sys.argv[1] in [' ', 't', 'T', 'True', 'true', 'y', 'yes'])
+except:
+    print("") # it's alright
 if pre_optim:
     crack_slab = relax_structure(crack_slab)
     
@@ -39,7 +43,17 @@ except:
         exit
 
 core_ring = np.loadtxt('tip_4ring.csv', dtype='int')
-hybrid_mark = np.array([1 if i in core_ring else 0 for i in range(len(crack_slab))])
+try:
+    xy_ring = np.loadtxt('xy_ring.csv', dtype='int')
+    temp = set(xy_ring)
+    for idx in xy_ring:
+        ring_indices = np.where(((crack_slab.positions[:,:2] - crack_slab.positions[idx,:2])**2).sum(axis=1)**0.5 < 0.5)[0]
+        temp = temp.union(set(ring_indices))
+    xy_ring = temp
+except:
+    print("WARNING: Breaking ring on XY plane not specified, using very small QM buffers")
+    xy_ring = set()
+hybrid_mark = np.array([1 if i in set(core_ring).union(set(xy_ring)) else 0 for i in range(len(crack_slab))])
 crack_slab.set_array('hybrid_mark', hybrid_mark)
 
 # CALC_ARGS: use first to have radius cutoff, use second for a bond hop construction
@@ -105,9 +119,13 @@ if pre_optim:
     # temp.set_array('move_mask', move_mask_TS)
     # temp = relax_structure(temp)
     # cluster_ase.positions[keep] = temp.get_positions()
+    try:
+        crack_slab = ase.io.read('../crack_open.xyz', format='extxyz')
+    except:
+        print('relaxing slab with open bond')
+        crack_slab = relax_structure(crack_slab)
+        crack_slab.write('../crack_open.xyz', format='extxyz')
 
-    crack_slab = relax_structure(crack_slab)
-    crack_slab.write('crack_open.xyz', format='extxyz')
     pretty.positions[:,:] = crack_slab.get_positions()
     cluster10 = create_cluster_simple(pretty, args_str=quippy.util.args_str(cluster_args))
     # remap is an essential step: re-indexes the atoms in cluster10 following the order in cluster
