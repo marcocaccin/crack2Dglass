@@ -176,3 +176,6 @@ crack_slab.info['is_cracked'] = False
 # Save results in extended XYZ format, including extra properties and info
 print('Writing crack slab to file "crack.xyz"')
 ase.io.write('crack.xyz', crack_slab, format='extxyz')
+crack_vis = ase.Atoms(crack_slab.get_atomic_numbers(), crack_slab.get_positions(), cell=crack_slab.get_cell())
+crack_vis.set_array('index', np.arange(len(crack_vis)))
+ase.io.write('crack_vis.xyz', crack_vis, format='extxyz')

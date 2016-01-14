@@ -16,8 +16,8 @@ from params import initial_strain as strain
 from some_tools import relax_structure
 
 ##### PARAMETERS TO CHANGE #####
-buffer_hops = 10
-deltay_tip = 1.
+buffer_hops = 8
+deltay_tip = 1.05
 
 
 ##### OTHER STUFF, LEAVE UNCHANGED UNLESS NECESSARY #####
@@ -60,6 +60,7 @@ crack_slab.set_array('hybrid_mark', hybrid_mark)
 # calc_args = Dictionary('little_clusters=F terminate even_electrons cluster_vacuum=12.0 cluster_calc_connect=F buffer_hops=1 transition_hops=0 randomise_buffer=F hysteretic_connect=F nneighb_only cluster_hopping_nneighb_only property_list=species:pos:hybrid_mark:index cluster_box_buffer=20.0 cluster_hopping=F keep_whole_residues=F min_images_only keep_whole_silica_tetrahedra protect_double_bonds=F force_no_fix_termination_clash=F termination_clash_factor=1.8 nneighb_different_z in_out_in=F cluster_hopping_skip_unreachable hysteretic_buffer=T hysteretic_buffer_inner_radius=7.0 hysteretic_buffer_outer_radius=9.0')
 calc_args = Dictionary('little_clusters=T terminate even_electrons cluster_vacuum=12.0 cluster_calc_connect=F buffer_hops=%d transition_hops=0 randomise_buffer=F hysteretic_connect=F nneighb_only cluster_hopping_nneighb_only property_list=species:pos:hybrid_mark:index cluster_box_buffer=20.0 cluster_hopping=T keep_whole_residues=F min_images_only keep_whole_silica_tetrahedra protect_double_bonds=F force_no_fix_termination_clash=F termination_clash_factor=1.8 nneighb_different_z in_out_in=F cluster_hopping_skip_unreachable hysteretic_buffer=F hysteretic_buffer_inner_radius=7.0 hysteretic_buffer_outer_radius=9.0 cluster_same_lattice=T' % buffer_hops)
 pretty = quippy.Atoms(crack_slab)
+pretty.set_pbc([True]*3)
 pretty.calc_connect()
 cluster_args = calc_args.copy()
 create_hybrid_weights_args = calc_args.copy()
@@ -82,6 +83,10 @@ with open('sio22d_minim_template.inp', 'r') as fff:
 
 # Write everything to folder
 os.chdir(folder)
+if True:
+    # DFT has interatomic distances of about 1.626 instead of 1.603 Angstrom
+    cluster_ase.set_cell(1.014 * cluster_ase.get_cell(), scale_atoms=True)
+
 cluster_ase.set_array('orig_index', cluster_indices)
 cluster_ase.write('ase_cluster_00.xyz', format='extxyz')
 cluster_ase.write('cp2k_cluster_00.xyz', format='xyz')
@@ -91,6 +96,7 @@ np.savetxt('cluster_shift.csv', shift_cluster)
 fix_in_dft.tofile('cp2k_fix_list.txt', sep=" ", format="%s")
 np.savetxt('cluster_indices_ase.csv', cluster_indices, fmt='%d')
 shutil.copy('../tip_4ring.csv', 'tip_4ring.csv')
+np.savetxt('ringcage.csv', list(set(core_ring).union(set(xy_ring))))
 shutil.copy('../crack.xyz', 'crack_ase.xyz')
 shutil.copy('../swap_topbottom_atoms.csv', 'swap_topbottom_atoms.csv')
 
@@ -124,7 +130,7 @@ if pre_optim:
     except:
         print('relaxing slab with open bond')
         crack_slab = relax_structure(crack_slab)
-        crack_slab.write('../crack_open.xyz', format='extxyz')
+        quippy.Atoms(crack_slab).write('../crack_open.xyz', format='extxyz')
 
     pretty.positions[:,:] = crack_slab.get_positions()
     cluster10 = create_cluster_simple(pretty, args_str=quippy.util.args_str(cluster_args))
@@ -136,6 +142,9 @@ if pre_optim:
     cluster_ase.positions -= shift_cluster
     cluster_ase.set_cell(np.diag(abc))
     
+if True:
+    # DFT has interatomic distances of about 1.626 instead of 1.603 Angstrom
+    cluster_ase.set_cell(1.014 * cluster_ase.get_cell(), scale_atoms=True)
 cluster_ase.set_array('orig_index', cluster_indices)
 cluster_ase.write('ase_cluster_10.xyz', format='extxyz')
 cluster_ase.write('cp2k_cluster_10.xyz', format='xyz')
